@@ -1,0 +1,18 @@
+# data (keep it out of git; runs record a hash of the file instead)
+data/
+# run outputs: commit leaderboard.csv if you want history in git, ignore the rest
+outputs/runs/
+outputs/data_check/
+models/
+mlflow.db
+mlruns/
+mlartifacts/
+*.joblib
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
+venv/
+.env

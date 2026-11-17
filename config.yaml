@@ -1,0 +1,98 @@
+# =============================================================================
+# opl-ml benchmark config. Everything a run depends on lives here; a copy of
+# this file is saved inside every run folder so results stay reproducible.
+# Lines marked TODO need your real column names / values.
+# =============================================================================
+project: opl-ml
+seed: 42
+
+data:
+  path: data/processed/training_dataset.csv
+  date_column: report_date          # TODO: your date column
+  date_format: null                 # e.g. "%d/%m/%Y"; null = let pandas infer
+  drop_columns: []                  # TODO: IDs, free text, leakage columns...
+  targets:                          # TODO: your two target columns
+    - target_a
+    - target_b
+  # How multiple labels appear in ONE cell, e.g. "x.abc;y.def".
+  # The model is trained on the FIRST label; evaluation counts a prediction
+  # as correct if it matches ANY of the row's labels.
+  label_separator: ";"              # TODO: check this matches your data
+  # Classes with fewer training rows than this are merged into "__other__"
+  # (also catches classes that only appear in the future/test period).
+  min_class_count: 10
+
+cleaning:
+  # Stateless, row-by-row fixes. Safe to apply before splitting.
+  strip_whitespace: true
+  lowercase: true                   # xyz.ABC -> xyz.abc (features AND targets)
+  # Manual corrections applied after lowercasing: {column: {old: new}}
+  value_maps: {}
+  #  some_column:
+  #    "xyz.abcc": "xyz.abc"
+
+features:
+  # null = auto-detect from dtypes. Override if a numeric-looking column is
+  # really a category (e.g. a code like 101, 205).
+  categorical_columns: null
+  numeric_columns: null
+  add_date_parts: false             # adds month / day-of-week / quarter
+
+split:
+  # Time-based: rows are sorted by date_column.
+  test_size: 0.2                    # last 20% of time = untouched holdout
+  n_splits: 5                       # expanding-window CV on the remaining 80%
+
+# Every enabled model is benchmarked with the same folds.
+# `preprocessor`: "linear" = impute + scale + one-hot, "tree" = impute + ordinal.
+# `params` go straight to the estimator; leave them empty for defaults.
+models:
+  dummy:
+    enabled: true
+    preprocessor: linear
+    params: {strategy: prior}       # predicts class frequencies: the floor to beat
+  logreg:
+    enabled: true
+    preprocessor: linear
+    params: {max_iter: 2000}
+  random_forest:
+    enabled: true
+    preprocessor: tree
+    params: {n_estimators: 300, n_jobs: -1}
+  hist_gb:
+    enabled: true
+    preprocessor: tree
+    params: {}
+  xgboost:
+    enabled: true
+    preprocessor: tree
+    params: {n_estimators: 300, tree_method: hist, n_jobs: -1}
+  lightgbm:
+    enabled: true
+    preprocessor: tree
+    params: {n_estimators: 300, verbose: -1, n_jobs: -1}
+
+selection:
+  # Metric used to pick the model that gets refit and scored on the holdout.
+  # Options: accuracy, balanced_accuracy, f1_macro, f1_weighted,
+  #          any_label_accuracy, top3_accuracy, coverage_at_target, neg_log_loss
+  primary_metric: f1_macro
+  final_model: auto                 # "auto" = best on CV, or a model name
+
+confidence:
+  # "High confidence" = predictions the analyst could accept without review.
+  # The threshold is the lowest predicted probability at which out-of-fold
+  # accuracy is still >= target_accuracy. It is chosen on CV, then checked on
+  # the holdout to see whether it holds up on future data.
+  target_accuracy: 0.90
+  min_rows: 30                      # ignore thresholds covering fewer rows
+
+importance:
+  enabled: true                     # permutation importance on the holdout
+  n_repeats: 5
+
+tracking:
+  runs_dir: outputs/runs
+  leaderboard: outputs/leaderboard.csv
+  mlflow: true                      # also log to MLflow (set false to skip)
+  mlflow_tracking_uri: sqlite:///mlflow.db
